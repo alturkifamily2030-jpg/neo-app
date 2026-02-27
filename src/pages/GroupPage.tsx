@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, type ReactNode } from 'react';
 import { downloadCSV } from '../utils/csvExport';
 import { useParams, useNavigate } from 'react-router-dom';
 import QRScanner from '../components/ui/QRScanner';
@@ -7,7 +7,8 @@ import {
   ArrowUpDown, ScanLine, User, Star, LayoutGrid, List, Link2, Columns3, RefreshCw,
   ChevronLeft as CalLeft, ChevronRight as CalRight, Calendar, Settings,
   Bell, CheckCircle2, Trash2, X, Check, ChevronRight as ChevRight,
-  Users, ShieldCheck, ClipboardList, Tag, Download,
+  Users, ShieldCheck, ClipboardList, Tag, Download, Shield, MapPin, Archive,
+  ImageOff, Package, Smartphone, ListChecks,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { plannedTasks as allPlanned } from '../data/mockData';
@@ -492,7 +493,7 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const handleQRReady = useCallback((canvas: HTMLCanvasElement) => { qrCanvasRef.current = canvas; }, []);
 
-  type SettingsSection = 'main' | 'general' | 'traffic' | 'members' | 'notifications' | 'tags' | 'qr';
+  type SettingsSection = 'main' | 'general' | 'traffic' | 'members' | 'notifications' | 'tags' | 'qr' | 'rules';
 
   const [section, setSection] = useState<SettingsSection>('main');
 
@@ -561,9 +562,27 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
     updateGroup(group.id, { [field]: !current });
   };
 
+  const toggleBool = (field: keyof typeof group) => {
+    updateGroup(group.id, { [field]: !(group[field] as boolean | undefined) });
+  };
+
   const toggleTag = (tag: 'location' | 'equipment' | 'category') => {
     const current = group.activeTags ?? { location: true, equipment: true, category: true };
     updateGroup(group.id, { activeTags: { ...current, [tag]: !current[tag] } });
+  };
+
+  const toggleTagRequired = (tag: 'location' | 'equipment' | 'category') => {
+    const current = group.tagsRequired ?? {};
+    updateGroup(group.id, { tagsRequired: { ...current, [tag]: !current[tag] } });
+  };
+
+  const setRoomReq = (val: 'room' | 'area' | 'either' | null) => {
+    updateGroup(group.id, { roomRequired: val });
+  };
+
+  const archiveGroup = () => {
+    updateGroup(group.id, { archived: true });
+    navigate('/fix');
   };
 
   const handleDelete = () => {
@@ -606,6 +625,16 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
         label: 'Tags',
         subtitle: [activeTags.location && 'Location', activeTags.equipment && 'Equipment', activeTags.category && 'Category'].filter(Boolean).join(', ') || 'None active',
         key: 'tags' as SettingsSection,
+      },
+      {
+        icon: <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center"><Shield size={16} className="text-orange-600" /></div>,
+        label: 'Task Rules & Automations',
+        subtitle: [
+          group.assigneeRequired && 'Assignee required',
+          group.checklistMustComplete && 'Checklist 100% required',
+          group.autoArchiveGreen && 'Auto-archive on Done',
+        ].filter(Boolean).join(' · ') || 'No active rules',
+        key: 'rules' as SettingsSection,
       },
       {
         icon: <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center"><QrCode size={16} className="text-gray-600" /></div>,
@@ -662,9 +691,9 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
             <div className="px-4 py-2 border-b border-red-100">
               <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">Danger Zone</p>
             </div>
-            <button className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-50 text-left border-b border-gray-100">
+            <button onClick={archiveGroup} className="flex items-center gap-3 w-full px-4 py-3 hover:bg-red-50 text-left border-b border-gray-100">
               <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-                <ClipboardList size={16} className="text-gray-500" />
+                <Archive size={16} className="text-gray-500" />
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-700">Archive Group</p>
@@ -1006,6 +1035,115 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
               </button>
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Task Rules & Automations ──
+  if (section === 'rules') {
+    const tagsReq = group.tagsRequired ?? {};
+    const roomReq = group.roomRequired ?? null;
+
+    // Helper: toggle row (call as function, not component)
+    const SwitchRow = (label: string, desc: string, value: boolean, onToggle: () => void) => (
+      <div className="flex items-start gap-3 py-3.5 border-b border-gray-100 last:border-b-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900">{label}</p>
+          <p className="text-xs text-gray-400 mt-0.5 leading-snug">{desc}</p>
+        </div>
+        <button onClick={onToggle}
+          className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 relative mt-0.5 ${value ? 'bg-blue-600' : 'bg-gray-200'}`}>
+          <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform ${value ? 'left-5' : 'left-0.5'}`} />
+        </button>
+      </div>
+    );
+
+    const RadioRow = (label: string, desc: string, checked: boolean, onSelect: () => void) => (
+      <button onClick={onSelect} className="flex items-start gap-3 py-3.5 border-b border-gray-100 last:border-b-0 w-full text-left">
+        <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center mt-0.5 ${checked ? 'border-blue-600 bg-blue-600' : 'border-gray-300'}`}>
+          {checked && <div className="w-2 h-2 rounded-full bg-white" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900">{label}</p>
+          <p className="text-xs text-gray-400 leading-snug mt-0.5">{desc}</p>
+        </div>
+      </button>
+    );
+
+    const Card = (title: string, icon: ReactNode, children: ReactNode) => (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
+          {icon}
+          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{title}</p>
+        </div>
+        <div className="px-4">{children}</div>
+      </div>
+    );
+
+    return (
+      <div className="h-full flex flex-col">
+        <SectionHeader title="Task Rules & Automations" />
+        <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4 pb-8">
+          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+            <p className="text-xs text-orange-700 leading-relaxed">
+              These rules apply to all tasks in this group. Active rules prompt task creators to provide required information and control task workflow behaviour.
+            </p>
+          </div>
+
+          {/* Tags Required */}
+          {Card('Tag(s) Required for Tasks', <Tag size={14} className="text-green-600 flex-shrink-0" />, <>
+            {SwitchRow('Location', 'A location tag must be added to every task', !!tagsReq.location, () => toggleTagRequired('location'))}
+            {SwitchRow('Equipment', 'An equipment tag must be selected for every task', !!tagsReq.equipment, () => toggleTagRequired('equipment'))}
+            {SwitchRow('Category', 'A category tag must be specified for every task', !!tagsReq.category, () => toggleTagRequired('category'))}
+          </>)}
+
+          {/* Asset & User */}
+          {Card('Asset & User Requirements', <Package size={14} className="text-blue-600 flex-shrink-0" />, <>
+            {SwitchRow('Asset(s) required for Tasks', 'An asset must be linked before a task can be submitted', !!group.assetRequired, () => toggleBool('assetRequired'))}
+            {SwitchRow('Assigned user(s) required for Tasks', 'At least one team member must be assigned before submitting', !!group.assigneeRequired, () => toggleBool('assigneeRequired'))}
+          </>)}
+
+          {/* Checklist Automations */}
+          {Card('Checklist Automations', <ListChecks size={14} className="text-purple-600 flex-shrink-0" />, <>
+            {SwitchRow('Auto set Task to Yellow when Checklist started', 'Task moves to In Progress automatically when the first checklist item is ticked', !!group.checklistAutoYellow, () => toggleBool('checklistAutoYellow'))}
+            {SwitchRow('Auto set Task to Green when Checklist completed', 'Task moves to Done automatically when all checklist items are ticked', !!group.checklistAutoGreen, () => toggleBool('checklistAutoGreen'))}
+            {SwitchRow('Checklist must be 100% before set to Green', 'Users cannot mark a task Done until every checklist item is completed', !!group.checklistMustComplete, () => toggleBool('checklistMustComplete'))}
+            {SwitchRow('Allow manual NFC checks', 'Users can manually confirm an NFC check without physically scanning the tag', !!group.allowManualNfc, () => toggleBool('allowManualNfc'))}
+          </>)}
+
+          {/* Task Completion & Archiving */}
+          {Card('Task Completion & Archiving', <CheckCircle2 size={14} className="text-teal-600 flex-shrink-0" />, <>
+            {SwitchRow('Auto Archive Green Tasks', 'Completed tasks are automatically hidden from the board after being set to Done', !!group.autoArchiveGreen, () => toggleBool('autoArchiveGreen'))}
+            {SwitchRow('Task approval required', 'Tasks marked Done by Users need Admin approval before closing', !!group.requiresApproval, () => toggle('requiresApproval', !!group.requiresApproval))}
+          </>)}
+
+          {/* Communication & Media */}
+          {Card('Communication & Media Restrictions', <ImageOff size={14} className="text-red-500 flex-shrink-0" />, <>
+            {SwitchRow('Send daily group email report to all group admins', 'A summary of task activity is emailed to all Group Admins every day at 8:00 AM', !!group.dailySummary, () => toggle('dailySummary', !!group.dailySummary))}
+            {SwitchRow('Block Photos from Gallery', 'Camera capture only — users cannot attach photos from their phone library', !!group.blockGalleryPhotos, () => toggleBool('blockGalleryPhotos'))}
+          </>)}
+
+          {/* Room / Area Requirements */}
+          {Card('Task Room / Area Requirements', <MapPin size={14} className="text-indigo-600 flex-shrink-0" />, <>
+            {RadioRow('No requirement', 'Tasks can be submitted without a room or area', !roomReq, () => setRoomReq(null))}
+            {RadioRow('A Room must be associated with all tasks', 'Every task in this group must have a room assigned to it', roomReq === 'room', () => setRoomReq('room'))}
+            {RadioRow('An Area must be associated with all Tasks', 'Every task in this group must have an area assigned to it', roomReq === 'area', () => setRoomReq('area'))}
+            {RadioRow('An Area OR a Room must be associated with all tasks', 'Tasks require either an area or a room to be set', roomReq === 'either', () => setRoomReq('either'))}
+          </>)}
+
+          {/* NFC info */}
+          {group.allowManualNfc && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
+              <Smartphone size={20} className="text-gray-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900">NFC Tags</p>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                  NFC tags require physical hardware (Snapfix NFC stickers or compatible tags). When manual NFC is allowed, users see a "Mark as scanned" button as a fallback. Contact your account admin to order NFC tags.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

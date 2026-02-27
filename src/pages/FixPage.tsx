@@ -116,7 +116,7 @@ export default function FixPage() {
   ).sort(sortFn);
 
   const filteredGroups = groups.filter(g =>
-    g.name.toLowerCase().includes(search.toLowerCase())
+    !g.archived && g.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const filteredAreas = areas.filter(a =>

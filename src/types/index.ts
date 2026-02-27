@@ -30,12 +30,29 @@ export interface Group {
   counts: StatusCounts;
   notificationsOn: boolean;
   memberIds: string[];
-  // Group Settings
+  archived?: boolean;
+  // Group Settings — existing
   trafficLightLabels?: { red: string; yellow: string; green: string };
   requiresApproval?: boolean;
   dailySummary?: boolean;
   activeTags?: { location: boolean; equipment: boolean; category: boolean };
   memberRoles?: Record<string, 'admin' | 'user'>; // userId → role within this group
+  // TAG(S) REQUIRED FOR TASKS
+  tagsRequired?: { location?: boolean; equipment?: boolean; category?: boolean };
+  // ASSET & USER REQUIREMENTS
+  assetRequired?: boolean;
+  assigneeRequired?: boolean;
+  // CHECKLIST AUTOMATIONS
+  checklistAutoYellow?: boolean;  // auto → In Progress when first item ticked
+  checklistAutoGreen?: boolean;   // auto → Done when all items ticked
+  checklistMustComplete?: boolean; // block Done if checklist < 100%
+  allowManualNfc?: boolean;       // allow bypass of NFC requirement
+  // TASK COMPLETION & ARCHIVING
+  autoArchiveGreen?: boolean;     // hide task after it reaches Done
+  // COMMUNICATION & MEDIA
+  blockGalleryPhotos?: boolean;   // camera only, no gallery upload
+  // TASK ROOM / AREA REQUIREMENTS
+  roomRequired?: 'room' | 'area' | 'either' | null;
 }
 
 export interface Area {

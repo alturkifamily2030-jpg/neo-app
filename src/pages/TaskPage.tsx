@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import CameraCapture from '../components/ui/CameraCapture';
 import {
   ChevronLeft, Trash2, MessageCircle, User, Plus, X, ChevronDown,
@@ -79,6 +79,10 @@ export default function TaskPage() {
 
   const group = groups.find(g => g.id === task.groupId);
   const requiresApproval = group?.requiresApproval ?? false;
+  const checklistMustComplete = group?.checklistMustComplete ?? false;
+  const checklistAutoYellow = group?.checklistAutoYellow ?? false;
+  const checklistAutoGreen = group?.checklistAutoGreen ?? false;
+  const blockGallery = group?.blockGalleryPhotos ?? false;
   const allPhotos = task.photos?.length ? task.photos : (task.image ? [task.image] : []);
   const cfg = statusConfig[task.status];
   const assignedUsers = teamMembers.filter(u => task.assignees.includes(u.id));
@@ -105,9 +109,20 @@ export default function TaskPage() {
   };
 
   const handleStatus = (status: TaskStatus) => {
-    if (status === 'done' && requiresApproval && task.status !== 'done') {
-      setShowApprovalDlg(true);
-      return;
+    if (status === 'done') {
+      // Enforce checklist-must-complete rule
+      if (checklistMustComplete && (task.subtasks?.length ?? 0) > 0) {
+        const allDone = task.subtasks!.every(s => s.done);
+        if (!allDone) {
+          alert('Checklist must be 100% complete before this task can be set to Done (group rule).');
+          return;
+        }
+      }
+      // Require approval
+      if (requiresApproval && task.status !== 'done') {
+        setShowApprovalDlg(true);
+        return;
+      }
     }
     updateTask(id!, { status });
   };
@@ -176,10 +191,29 @@ export default function TaskPage() {
     updateTask(id!, { subtasks: [...(task.subtasks ?? []), { id: `st${Date.now()}`, text: newSubtaskText.trim(), done: false }] });
     setNewSubtaskText(''); setShowAddSubtask(false);
   };
-  const toggleSubtask = (stId: string) =>
-    updateTask(id!, { subtasks: task.subtasks?.map(s => s.id === stId ? { ...s, done: !s.done } : s) });
+  const toggleSubtask = (stId: string) => {
+    const updated = task.subtasks?.map(s => s.id === stId ? { ...s, done: !s.done } : s) ?? [];
+    const anyDone = updated.some(s => s.done);
+    const allDone = updated.length > 0 && updated.every(s => s.done);
+    let newStatus: TaskStatus | undefined;
+    if (allDone && checklistAutoGreen && task.status !== 'done') newStatus = 'done';
+    else if (anyDone && checklistAutoYellow && task.status === 'open') newStatus = 'in_progress';
+    updateTask(id!, { subtasks: updated, ...(newStatus ? { status: newStatus } : {}) });
+  };
   const removeSubtask = (stId: string) =>
     updateTask(id!, { subtasks: task.subtasks?.filter(s => s.id !== stId) });
+
+  const photoFileRef = useRef<HTMLInputElement>(null);
+  const handleGalleryPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target!.result as string;
+      updateTask(id!, { photos: [...(task.photos ?? []), dataUrl] });
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Time log handlers
   const addTimeEntry = () => {
@@ -278,12 +312,23 @@ export default function TaskPage() {
                 ))}
               </div>
             )}
-            <button
-              onClick={() => setShowCamera(true)}
-              className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 hover:bg-black/70 text-white text-xs px-2.5 py-1.5 rounded-full"
-            >
-              <ImagePlus size={12} /> Add Photo
-            </button>
+            <div className="absolute bottom-3 left-3 flex gap-1.5">
+              <button
+                onClick={() => setShowCamera(true)}
+                className="flex items-center gap-1.5 bg-black/50 hover:bg-black/70 text-white text-xs px-2.5 py-1.5 rounded-full"
+              >
+                <ImagePlus size={12} /> Camera
+              </button>
+              {!blockGallery && (
+                <button
+                  onClick={() => photoFileRef.current?.click()}
+                  className="flex items-center gap-1.5 bg-black/50 hover:bg-black/70 text-white text-xs px-2.5 py-1.5 rounded-full"
+                >
+                  <ImagePlus size={12} /> Gallery
+                </button>
+              )}
+            </div>
+            <input ref={photoFileRef} type="file" accept="image/*" className="hidden" onChange={handleGalleryPhoto} />
             <div className="absolute top-3 right-3">
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.activeBg}`}>
                 {cfg.label}
@@ -294,12 +339,22 @@ export default function TaskPage() {
           <div className="relative flex items-center gap-3 px-4 h-20" style={{ backgroundColor: task.groupColor + '15' }}>
             <span className={`w-4 h-4 rounded-full ${cfg.dot} flex-shrink-0`} />
             <span className="text-sm font-medium text-gray-600 flex-1">{cfg.label}</span>
-            <button
-              onClick={() => setShowCamera(true)}
-              className="flex items-center gap-1.5 bg-white/80 hover:bg-white text-gray-600 text-xs px-3 py-1.5 rounded-full border border-gray-200 flex-shrink-0"
-            >
-              <ImagePlus size={13} /> Add Photo
-            </button>
+            <div className="flex gap-1.5 flex-shrink-0">
+              <button
+                onClick={() => setShowCamera(true)}
+                className="flex items-center gap-1.5 bg-white/80 hover:bg-white text-gray-600 text-xs px-3 py-1.5 rounded-full border border-gray-200"
+              >
+                <ImagePlus size={13} /> Camera
+              </button>
+              {!blockGallery && (
+                <button
+                  onClick={() => photoFileRef.current?.click()}
+                  className="flex items-center gap-1.5 bg-white/80 hover:bg-white text-gray-600 text-xs px-3 py-1.5 rounded-full border border-gray-200"
+                >
+                  <ImagePlus size={13} /> Gallery
+                </button>
+              )}
+            </div>
           </div>
         )}
 
