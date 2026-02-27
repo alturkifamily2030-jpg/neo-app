@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   LayoutDashboard, FileText, Download, ChevronRight,
-  Filter, RotateCcw, TrendingUp, Trophy, AlertTriangle, Medal,
+  Filter, RotateCcw, TrendingUp, Trophy, AlertTriangle, Medal, Calendar,
 } from 'lucide-react';
 import {
   format, subDays, startOfDay, endOfDay, isWithinInterval,
@@ -47,6 +47,11 @@ export default function DashboardPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('30');
   const [groupFilter, setGroupFilter] = useState('all');
   const [generatedReports, setGeneratedReports] = useState<Record<string, boolean>>({});
+
+  // ── Report period state ────────────────────────────────────────
+  const [reportPeriod, setReportPeriod] = useState<'today' | '7' | '30' | '90' | 'year' | 'all' | 'custom'>('30');
+  const [reportFrom,   setReportFrom]   = useState('');
+  const [reportTo,     setReportTo]     = useState('');
 
   const {
     tasks, assets, plannedTasks, teamMembers, groups,
@@ -177,9 +182,39 @@ export default function DashboardPage() {
     })
     .sort((a, b) => b.points - a.points);
 
+  // ── Report period filtering ────────────────────────────────────
+  const reportTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (reportPeriod === 'all') return true;
+      if (reportPeriod === 'custom') {
+        const from = reportFrom ? new Date(reportFrom) : null;
+        const to   = reportTo   ? new Date(reportTo + 'T23:59:59') : null;
+        if (from && t.createdAt < from) return false;
+        if (to   && t.createdAt > to)   return false;
+        return true;
+      }
+      const days = reportPeriod === 'today' ? 0 : reportPeriod === 'year' ? 365 : parseInt(reportPeriod);
+      const cutoff = reportPeriod === 'today'
+        ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        : subDays(now, days);
+      return t.createdAt >= cutoff;
+    });
+  }, [tasks, reportPeriod, reportFrom, reportTo]);
+
+  const reportPeriodLabel = (() => {
+    if (reportPeriod === 'today') return 'Today';
+    if (reportPeriod === '7')     return 'Last 7 days';
+    if (reportPeriod === '30')    return 'Last 30 days';
+    if (reportPeriod === '90')    return 'Last 90 days';
+    if (reportPeriod === 'year')  return 'This Year';
+    if (reportPeriod === 'all')   return 'All Time';
+    if (reportPeriod === 'custom' && reportFrom && reportTo) return `${reportFrom} → ${reportTo}`;
+    return 'Custom Range';
+  })();
+
   // ── Report: Completed by User ─────────────────────────────────
   const userReport = teamMembers.map(u => {
-    const assigned  = tasks.filter(t => t.assignees.includes(u.id));
+    const assigned  = reportTasks.filter(t => t.assignees.includes(u.id));
     const doneCount = assigned.filter(t => t.status === 'done').length;
     const openCount = assigned.filter(t => t.status === 'open').length;
     const rateVal   = assigned.length > 0 ? Math.round(doneCount / assigned.length * 100) : 0;
@@ -188,7 +223,7 @@ export default function DashboardPage() {
 
   // CSV generators
   const generateTaskDetails = () => {
-    const data = tasks.map(t => ({
+    const data = reportTasks.map(t => ({
       'ID': t.id,
       'Title': t.title,
       'Group': t.groupName,
@@ -198,7 +233,7 @@ export default function DashboardPage() {
       'Comments': t.comments.length,
       'Created': format(t.createdAt, 'yyyy-MM-dd HH:mm'),
     }));
-    downloadCSV(data, 'neo-task-details.csv');
+    downloadCSV(data, `neo-task-details-${reportPeriodLabel.replace(/\s/g,'-')}.csv`);
     setGeneratedReports(p => ({ ...p, tasks: true }));
   };
 
@@ -208,7 +243,7 @@ export default function DashboardPage() {
       'Assigned': u.assigned, 'Completed': u.done,
       'Open': u.open, 'Completion Rate': `${u.rate}%`,
     }));
-    downloadCSV(data, 'neo-user-report.csv');
+    downloadCSV(data, `neo-user-report-${reportPeriodLabel.replace(/\s/g,'-')}.csv`);
     setGeneratedReports(p => ({ ...p, users: true }));
   };
 
@@ -697,6 +732,52 @@ ${body}
       {/* ── Reports tab ──────────────────────────────────────── */}
       {tab === 'reports' && (
         <div className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6">
+
+          {/* ── Period selector ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Calendar size={15} className="text-blue-600" />
+              <h2 className="text-sm font-semibold text-gray-800">Report Period</h2>
+              <span className="ml-auto text-xs font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{reportPeriodLabel} · {reportTasks.length} tasks</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { key: 'today', label: 'Today'       },
+                { key: '7',     label: 'Last 7 days'  },
+                { key: '30',    label: 'Last 30 days' },
+                { key: '90',    label: 'Last 90 days' },
+                { key: 'year',  label: 'This Year'    },
+                { key: 'all',   label: 'All Time'     },
+                { key: 'custom',label: 'Custom'       },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setReportPeriod(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors
+                    ${reportPeriod === key
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {reportPeriod === 'custom' && (
+              <div className="flex items-center gap-3 pt-1">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                  <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <h2 className="text-sm font-semibold text-gray-700 mb-1">Available Reports</h2>
             <p className="text-xs text-gray-400">Generate and download reports in Excel or PDF format.</p>

@@ -641,9 +641,11 @@ function CreateAssetModal({ onClose, onSave }: {
   onClose: () => void;
   onSave: (a: Omit<Asset, 'id' | 'maintenanceHistory' | 'assetDocuments' | 'qrCode'>) => void;
 }) {
+  const { areas } = useNotifications();
   const [name,         setName]         = useState('');
   const [category,     setCategory]     = useState('');
   const [location,     setLocation]     = useState('');
+  const [customLoc,    setCustomLoc]    = useState(false);
   const [serial,       setSerial]       = useState('');
   const [model,        setModel]        = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -688,9 +690,29 @@ function CreateAssetModal({ onClose, onSave }: {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-              <input type="text" value={location} onChange={e => setLocation(e.target.value)}
-                placeholder="e.g. Boiler Room"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {!customLoc ? (
+                <select
+                  value={location}
+                  onChange={e => {
+                    if (e.target.value === '__custom__') { setCustomLoc(true); setLocation(''); }
+                    else setLocation(e.target.value);
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">Select area…</option>
+                  {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                  <option value="__custom__">+ Custom location…</option>
+                </select>
+              ) : (
+                <div className="flex gap-1.5">
+                  <input type="text" value={location} onChange={e => setLocation(e.target.value)}
+                    placeholder="Enter location"
+                    autoFocus
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button type="button" onClick={() => { setCustomLoc(false); setLocation(''); }}
+                    className="px-2.5 py-2 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 text-xs">↩</button>
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
