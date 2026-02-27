@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { downloadCSV } from '../utils/csvExport';
 import { useParams, useNavigate } from 'react-router-dom';
 import QRScanner from '../components/ui/QRScanner';
 import {
@@ -6,7 +7,7 @@ import {
   ArrowUpDown, ScanLine, User, Star, LayoutGrid, List, Link2, Columns3, RefreshCw,
   ChevronLeft as CalLeft, ChevronRight as CalRight, Calendar, Settings,
   Bell, CheckCircle2, Trash2, X, Check, ChevronRight as ChevRight,
-  Users, ShieldCheck, ClipboardList, Tag,
+  Users, ShieldCheck, ClipboardList, Tag, Download,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { plannedTasks as allPlanned } from '../data/mockData';
@@ -25,7 +26,9 @@ export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { tasks, addTask, groups, teamMembers } = useNotifications();
+  const { tasks, addTask, updateTask, groups, teamMembers } = useNotifications();
+  const dragTaskId = useRef<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const group = groups.find(g => g.id === id);
   const [groupTab, setGroupTab] = useState<GroupTab>('tasks');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
@@ -194,6 +197,23 @@ export default function GroupPage() {
               <Plus size={18} />
             </button>
             <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><QrCode size={18} /></button>
+            <button
+              title="Export tasks as CSV"
+              onClick={() => {
+                const rows = groupTasks.map(t => [
+                  t.id, t.title, t.status, t.priority,
+                  teamMembers.filter(u => t.assignees.includes(u.id)).map(u => u.name).join('; '),
+                  t.tags?.location ?? '', t.tags?.equipment ?? '', t.tags?.category ?? '',
+                  t.dueDate ? format(t.dueDate, 'yyyy-MM-dd') : '',
+                  format(t.createdAt, 'yyyy-MM-dd HH:mm'),
+                ]);
+                downloadCSV(`${group.name}-tasks.csv`,
+                  ['ID','Title','Status','Priority','Assignees','Location','Equipment','Category','Due Date','Created'],
+                  rows);
+              }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+              <Download size={18} />
+            </button>
             <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><MoreHorizontal size={18} /></button>
           </div>
 
@@ -206,19 +226,28 @@ export default function GroupPage() {
                   { status: 'done' as const, label: tl.done, dot: 'bg-green-500', ring: 'border-green-200', head: 'bg-green-50', text: 'text-green-600', count: displayCounts.done },
                 ]).map(col => {
                   const colTasks = groupTasks.filter(t => t.status === col.status).filter(t => t.title.toLowerCase().includes(search.toLowerCase()));
+                  const isDropTarget = dragOverCol === col.status;
                   return (
-                    <div key={col.status} className="flex-1 min-w-[280px] flex flex-col border-r border-gray-200 last:border-r-0">
+                    <div key={col.status} className="flex-1 min-w-[280px] flex flex-col border-r border-gray-200 last:border-r-0"
+                      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(col.status); }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null); }}
+                      onDrop={e => { e.preventDefault(); if (dragTaskId.current) { updateTask(dragTaskId.current, { status: col.status }); dragTaskId.current = null; } setDragOverCol(null); }}
+                    >
                       <div className={`flex items-center gap-2 px-4 py-3 ${col.head} border-b ${col.ring} flex-shrink-0`}>
                         <span className={`w-3 h-3 rounded-full ${col.dot} flex-shrink-0`} />
                         <span className={`text-sm font-semibold ${col.text}`}>{col.label}</span>
                         <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${col.head} ${col.text} border ${col.ring}`}>{col.count}</span>
                       </div>
-                      <div className="flex-1 overflow-y-auto bg-gray-50 p-2 space-y-2">
+                      <div className={`flex-1 overflow-y-auto p-2 space-y-2 transition-colors ${isDropTarget ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-gray-50'}`}>
                         {colTasks.length === 0
-                          ? <div className="flex items-center justify-center py-12 text-gray-300 text-xs">No tasks</div>
+                          ? <div className="flex items-center justify-center py-12 text-gray-300 text-xs">{isDropTarget ? '⬇ Drop here' : 'No tasks'}</div>
                           : colTasks.map(task => (
-                            <div key={task.id} onClick={() => navigate(`/fix/task/${task.id}`)}
-                              className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow">
+                            <div key={task.id}
+                              draggable
+                              onDragStart={e => { dragTaskId.current = task.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); }}
+                              onDragEnd={() => { dragTaskId.current = null; setDragOverCol(null); }}
+                              onClick={() => navigate(`/fix/task/${task.id}`)}
+                              className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow">
                               {task.image && <div className="w-full h-24 bg-gray-100"><img src={task.image} alt="" className="w-full h-full object-cover" /></div>}
                               <div className="p-3">
                                 <p className="text-xs font-medium text-gray-900 leading-snug">{task.title}</p>

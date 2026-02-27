@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, List, Filter, Plus, Search, Columns3, Camera,
@@ -33,7 +33,7 @@ const MOCK_ROOMS = FLOORS.flatMap(floor =>
 
 export default function FixPage() {
   const navigate = useNavigate();
-  const { tasks, addTask, groups, addGroup, areas, addArea, teamMembers } = useNotifications();
+  const { tasks, addTask, updateTask, groups, addGroup, areas, addArea, teamMembers } = useNotifications();
   const [tab, setTab] = useState<Tab>('groups');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
@@ -58,14 +58,26 @@ export default function FixPage() {
   const [showFilterPanel,  setShowFilterPanel]  = useState(false);
   const [filterGroups,     setFilterGroups]     = useState<string[]>([]);
   const [filterPriorities, setFilterPriorities] = useState<Priority[]>([]);
+  const [filterLocations,  setFilterLocations]  = useState<string[]>([]);
+  const [filterEquipment,  setFilterEquipment]  = useState<string[]>([]);
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [selectedFloor,    setSelectedFloor]    = useState(1);
+  const dragTaskId = useRef<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
   const toggleFilterGroup = (id: string) =>
     setFilterGroups(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
   const toggleFilterPriority = (p: Priority) =>
     setFilterPriorities(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  const toggleFilterLocation = (v: string) =>
+    setFilterLocations(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleFilterEquipment = (v: string) =>
+    setFilterEquipment(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const toggleFilterCategory = (v: string) =>
+    setFilterCategories(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const clearFilters = () => { setFilterGroups([]); setFilterPriorities([]); setFilterLocations([]); setFilterEquipment([]); setFilterCategories([]); };
 
-  const activeFilters = filterGroups.length + filterPriorities.length;
+  const activeFilters = filterGroups.length + filterPriorities.length + filterLocations.length + filterEquipment.length + filterCategories.length;
 
   const baseFeedTasks = tasks.filter(t => {
     const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -73,7 +85,10 @@ export default function FixPage() {
     const matchMine = !myTasksOnly || t.assignees.includes(currentUser.id);
     const matchGroups = filterGroups.length === 0 || filterGroups.includes(t.groupId);
     const matchPriority = filterPriorities.length === 0 || filterPriorities.includes(t.priority);
-    return matchSearch && matchMine && matchGroups && matchPriority;
+    const matchLoc = filterLocations.length === 0 || (t.tags?.location != null && filterLocations.includes(t.tags.location));
+    const matchEq  = filterEquipment.length === 0  || (t.tags?.equipment != null && filterEquipment.includes(t.tags.equipment));
+    const matchCat = filterCategories.length === 0 || (t.tags?.category != null && filterCategories.includes(t.tags.category));
+    return matchSearch && matchMine && matchGroups && matchPriority && matchLoc && matchEq && matchCat;
   });
 
   const isOverdueFn = (t: Task) => t.dueDate != null && isAfter(new Date(), t.dueDate) && t.status !== 'done';
@@ -178,6 +193,10 @@ export default function FixPage() {
   const searchPlaceholder = {
     dashboard: 'Search', feed: 'Search Tasks', groups: 'Search Groups', rooms: 'Search Rooms', areas: 'Search Areas'
   }[tab];
+
+  const allTagLocations  = [...new Set(tasks.flatMap(t => t.tags?.location  ? [t.tags.location]  : []))].sort();
+  const allTagEquipment  = [...new Set(tasks.flatMap(t => t.tags?.equipment ? [t.tags.equipment] : []))].sort();
+  const allTagCategories = [...new Set(tasks.flatMap(t => t.tags?.category  ? [t.tags.category]  : []))].sort();
 
   return (
     <div className="h-full flex flex-col">
@@ -372,12 +391,52 @@ export default function FixPage() {
               ))}
             </div>
           </div>
+          {allTagLocations.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">📍 Location</p>
+              <div className="flex flex-wrap gap-1.5">
+                {allTagLocations.map(v => (
+                  <button key={v} onClick={() => toggleFilterLocation(v)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+                      ${filterLocations.includes(v) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {allTagEquipment.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">🔧 Equipment</p>
+              <div className="flex flex-wrap gap-1.5">
+                {allTagEquipment.map(v => (
+                  <button key={v} onClick={() => toggleFilterEquipment(v)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+                      ${filterEquipment.includes(v) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {allTagCategories.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">🏷 Category</p>
+              <div className="flex flex-wrap gap-1.5">
+                {allTagCategories.map(v => (
+                  <button key={v} onClick={() => toggleFilterCategory(v)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors
+                      ${filterCategories.includes(v) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {activeFilters > 0 && (
-            <button
-              onClick={() => { setFilterGroups([]); setFilterPriorities([]); }}
-              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 font-medium"
-            >
-              <X size={12} /> Clear all filters
+            <button onClick={clearFilters}
+              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-600 font-medium">
+              <X size={12} /> Clear all filters ({activeFilters})
             </button>
           )}
         </div>
@@ -559,8 +618,13 @@ export default function FixPage() {
                 { status: 'done'        as const, label: 'Done',        dot: 'bg-green-500',  ring: 'border-green-200',  head: 'bg-green-50',  text: 'text-green-600' },
               ]).map(col => {
                 const colTasks = baseFeedTasks.filter(t => t.status === col.status);
+                const isDropTarget = dragOverCol === col.status;
                 return (
-                  <div key={col.status} className="flex-1 min-w-[280px] flex flex-col border-r border-gray-200 last:border-r-0">
+                  <div key={col.status} className="flex-1 min-w-[280px] flex flex-col border-r border-gray-200 last:border-r-0"
+                    onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(col.status); }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null); }}
+                    onDrop={e => { e.preventDefault(); if (dragTaskId.current) { updateTask(dragTaskId.current, { status: col.status }); dragTaskId.current = null; } setDragOverCol(null); }}
+                  >
                     <div className={`flex items-center gap-2 px-4 py-3 ${col.head} border-b ${col.ring} flex-shrink-0`}>
                       <span className={`w-3 h-3 rounded-full ${col.dot} flex-shrink-0`} />
                       <span className={`text-sm font-semibold ${col.text}`}>{col.label}</span>
@@ -568,14 +632,19 @@ export default function FixPage() {
                         {colTasks.length}
                       </span>
                     </div>
-                    <div className="flex-1 overflow-y-auto bg-gray-50 p-2 space-y-2">
+                    <div className={`flex-1 overflow-y-auto p-2 space-y-2 transition-colors ${isDropTarget ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-gray-50'}`}>
                       {colTasks.length === 0 ? (
-                        <div className="flex items-center justify-center py-12 text-gray-300 text-xs">No tasks</div>
+                        <div className="flex items-center justify-center py-12 text-gray-300 text-xs">
+                          {isDropTarget ? '⬇ Drop here' : 'No tasks'}
+                        </div>
                       ) : colTasks.map(task => (
                         <div
                           key={task.id}
+                          draggable
+                          onDragStart={e => { dragTaskId.current = task.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); }}
+                          onDragEnd={() => { dragTaskId.current = null; setDragOverCol(null); }}
                           onClick={() => navigate(`/fix/task/${task.id}`)}
-                          className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                          className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
                         >
                           {task.image && (
                             <div className="w-full h-24 bg-gray-100">
