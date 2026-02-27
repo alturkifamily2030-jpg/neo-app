@@ -17,19 +17,10 @@ import { useNotifications } from '../context/NotificationContext';
 import { currentUser } from '../data/mockData';
 import type { Area, Task, TaskStatus, Priority } from '../types';
 
-type Tab = 'dashboard' | 'feed' | 'groups' | 'rooms' | 'areas';
+type Tab = 'dashboard' | 'feed' | 'groups' | 'areas';
 type FeedFilter = 'all' | TaskStatus | 'overdue';
 type SortBy = 'newest' | 'oldest' | 'priority' | 'group' | 'due_date';
 
-// Mock room grid data (5 floors, 10 rooms each)
-const FLOORS = [1, 2, 3, 4, 5];
-const MOCK_ROOMS = FLOORS.flatMap(floor =>
-  Array.from({ length: 10 }, (_, i) => ({
-    id: `${floor}${String(i + 1).padStart(2, '0')}`,
-    floor,
-    number: `${floor}${String(i + 1).padStart(2, '0')}`,
-  }))
-);
 
 export default function FixPage() {
   const navigate = useNavigate();
@@ -61,7 +52,6 @@ export default function FixPage() {
   const [filterLocations,  setFilterLocations]  = useState<string[]>([]);
   const [filterEquipment,  setFilterEquipment]  = useState<string[]>([]);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
-  const [selectedFloor,    setSelectedFloor]    = useState(1);
   const dragTaskId = useRef<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
@@ -206,12 +196,11 @@ export default function FixPage() {
     { key: 'dashboard' as Tab, label: 'Dashboard' },
     { key: 'feed' as Tab, label: `Feed (${tasks.length})` },
     { key: 'groups' as Tab, label: `Groups (${groups.length})` },
-    { key: 'rooms' as Tab, label: 'Rooms' },
     { key: 'areas' as Tab, label: `Areas (${areas.length})` },
   ];
 
   const searchPlaceholder = {
-    dashboard: 'Search', feed: 'Search Tasks', groups: 'Search Groups', rooms: 'Search Rooms', areas: 'Search Areas'
+    dashboard: 'Search', feed: 'Search Tasks', groups: 'Search Groups', areas: 'Search Areas'
   }[tab];
 
   const allTagLocations  = [...new Set(tasks.flatMap(t => t.tags?.location  ? [t.tags.location]  : []))].sort();
@@ -717,56 +706,6 @@ export default function FixPage() {
               {filteredGroups.map(group => (
                 <GroupCard key={group.id} group={group} onClick={() => navigate(`/fix/group/${group.id}`)} />
               ))}
-            </div>
-          </div>
-        )}
-        {tab === 'rooms' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Floor selector */}
-            <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-2 overflow-x-auto flex-shrink-0">
-              {FLOORS.map(floor => (
-                <button
-                  key={floor}
-                  onClick={() => setSelectedFloor(floor)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 border transition-colors
-                    ${selectedFloor === floor ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                >
-                  Floor {floor}
-                </button>
-              ))}
-              <div className="ml-auto flex items-center gap-1 text-xs text-gray-400 flex-shrink-0">
-                <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" /> Open
-                <span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 inline-block ml-2" /> In Progress
-                <span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block ml-2" /> Clear
-              </div>
-            </div>
-            {/* Room grid */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid grid-cols-5 gap-2">
-                {MOCK_ROOMS.filter(r => r.floor === selectedFloor).map(room => {
-                  const roomTasks = tasks.filter(t => t.tags?.location?.includes(room.number) || t.areaId === room.id);
-                  const openCnt   = roomTasks.filter(t => t.status === 'open').length;
-                  const progCnt   = roomTasks.filter(t => t.status === 'in_progress').length;
-                  const bgColor   = openCnt > 0 ? 'bg-red-50 border-red-200' : progCnt > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200';
-                  const dotColor  = openCnt > 0 ? 'bg-red-500' : progCnt > 0 ? 'bg-yellow-400' : 'bg-green-400';
-                  return (
-                    <button
-                      key={room.id}
-                      onClick={() => { setTab('feed'); setSearch(room.number); }}
-                      className={`${bgColor} border rounded-xl p-2 flex flex-col items-center justify-center aspect-square hover:shadow-sm transition-shadow`}
-                    >
-                      <div className={`w-2.5 h-2.5 rounded-full ${dotColor} mb-1`} />
-                      <p className="text-xs font-bold text-gray-800">{room.number}</p>
-                      {(openCnt + progCnt) > 0 && (
-                        <p className="text-[9px] text-gray-500 mt-0.5">{openCnt + progCnt} task{openCnt + progCnt !== 1 ? 's' : ''}</p>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-gray-400 text-center mt-4">
-                Floor {selectedFloor} · {MOCK_ROOMS.filter(r => r.floor === selectedFloor).length} rooms · Tap a room to see its tasks
-              </p>
             </div>
           </div>
         )}
