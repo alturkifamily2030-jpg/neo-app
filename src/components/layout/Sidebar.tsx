@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Wrench, Calendar, Package, MessageCircle, BarChart2,
-  Lightbulb, User, Settings, LogOut, ChevronRight, ChevronLeft, ShieldCheck,
+  User, Settings, LogOut, ChevronRight, ChevronLeft, ShieldCheck,
 } from 'lucide-react';
 import { currentUser } from '../../data/mockData';
 
@@ -80,11 +80,6 @@ export default function Sidebar({ collapsed, onToggle, onLogout }: SidebarProps)
         <NavItem to="/assets" icon={Package} label="Track" collapsed={collapsed} />
         <NavItem to="/chat" icon={MessageCircle} label="Chat" collapsed={collapsed} />
         <NavItem to="/dashboard" icon={BarChart2} label="Dashboard & Reports" collapsed={collapsed} />
-
-        <div className="pt-3">
-          {!collapsed && <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1">Support</p>}
-          <NavItem to="/helphub" icon={Lightbulb} label="HelpHub" collapsed={collapsed} />
-        </div>
 
         <div className="pt-3">
           {!collapsed && <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1">Settings</p>}
