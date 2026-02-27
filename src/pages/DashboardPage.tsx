@@ -6,13 +6,14 @@ import {
 } from 'recharts';
 import {
   LayoutDashboard, FileText, Download, ChevronRight,
-  Filter, RotateCcw, TrendingUp, Trophy, AlertTriangle, Medal, Calendar,
+  Filter, RotateCcw, TrendingUp, Trophy, AlertTriangle, Medal, Calendar, Shield,
 } from 'lucide-react';
 import {
   format, subDays, startOfDay, endOfDay, isWithinInterval,
 } from 'date-fns';
 import { useNotifications } from '../context/NotificationContext';
 import { useComply } from '../context/ComplyContext';
+import { currentUser } from '../data/mockData';
 import type { PlannedTask } from '../types';
 
 type DashTab = 'dashboard' | 'reports' | 'leaderboard';
@@ -56,6 +57,10 @@ export default function DashboardPage() {
   const {
     tasks, assets, plannedTasks, teamMembers, groups,
   } = useNotifications();
+
+  // ── Role-based report access ───────────────────────────────────
+  const meUser = teamMembers.find(u => u.id === currentUser.id);
+  const canDownloadReports = ['account_admin', 'group_admin', 'family'].includes(meUser?.accountRole ?? '');
   const { inspections } = useComply();
 
   const now = new Date();
@@ -778,9 +783,17 @@ ${body}
             )}
           </div>
 
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700 mb-1">Available Reports</h2>
-            <p className="text-xs text-gray-400">Generate and download reports in Excel or PDF format.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700 mb-1">Available Reports</h2>
+              <p className="text-xs text-gray-400">Generate and download reports in Excel or PDF format.</p>
+            </div>
+            {!canDownloadReports && (
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                <Shield size={13} className="text-amber-500 flex-shrink-0" />
+                <p className="text-xs text-amber-700 font-medium">View only — Account Admin, Group Admin or Family can download</p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -895,16 +908,23 @@ ${body}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-auto pt-3 border-t border-gray-100">
-                  <button
-                    onClick={r.onDownload}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                      ${generatedReports[r.key]
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-blue-700 hover:bg-blue-800 text-white'}`}
-                  >
-                    <Download size={12} />
-                    {generatedReports[r.key] ? 'Downloaded ✓' : 'Download'}
-                  </button>
+                  {canDownloadReports ? (
+                    <button
+                      onClick={r.onDownload}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                        ${generatedReports[r.key]
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-blue-700 hover:bg-blue-800 text-white'}`}
+                    >
+                      <Download size={12} />
+                      {generatedReports[r.key] ? 'Downloaded ✓' : 'Download'}
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-400 cursor-not-allowed select-none" title="Account Admin, Group Admin or Family role required">
+                      <Download size={12} />
+                      No access
+                    </div>
+                  )}
                   <button
                     onClick={r.onView}
                     className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50"
