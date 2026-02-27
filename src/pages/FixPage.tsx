@@ -115,13 +115,33 @@ export default function FixPage() {
     baseFeedTasks.filter(t => t.status === feedFilter)
   ).sort(sortFn);
 
-  const filteredGroups = groups.filter(g =>
-    !g.archived && g.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredGroups = groups
+    .filter(g => !g.archived && g.name.toLowerCase().includes(search.toLowerCase()))
+    .map(g => {
+      const gt = tasks.filter(t => t.groupId === g.id);
+      return {
+        ...g,
+        counts: {
+          red:    gt.filter(t => t.status === 'open').length,
+          yellow: gt.filter(t => t.status === 'in_progress').length,
+          green:  gt.filter(t => t.status === 'done').length,
+        },
+      };
+    });
 
-  const filteredAreas = areas.filter(a =>
-    a.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredAreas = areas
+    .filter(a => a.name.toLowerCase().includes(search.toLowerCase()))
+    .map(a => {
+      const at = tasks.filter(t => t.areaId === a.id);
+      return {
+        ...a,
+        counts: {
+          red:    at.filter(t => t.status === 'open').length,
+          yellow: at.filter(t => t.status === 'in_progress').length,
+          green:  at.filter(t => t.status === 'done').length,
+        },
+      };
+    });
 
   const handleCreateTask = (taskData: Omit<Task, 'id' | 'createdAt' | 'comments'>) => {
     addTask({

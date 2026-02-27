@@ -57,9 +57,9 @@ export default function GroupPage() {
 
   const groupTasks = tasks.filter(t => t.groupId === group.id);
   const displayCounts = {
-    open: group.counts.red,
-    in_progress: group.counts.yellow,
-    done: group.counts.green,
+    open:        groupTasks.filter(t => t.status === 'open').length,
+    in_progress: groupTasks.filter(t => t.status === 'in_progress').length,
+    done:        groupTasks.filter(t => t.status === 'done').length,
   };
   const filteredTasks = groupTasks
     .filter(t => t.status === statusFilter)
