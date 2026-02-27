@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Plus, Search, X, Columns3, RefreshCw, CalendarRange,
   LayoutDashboard, Calendar as CalendarIcon, List, Clock, Play,
+  CheckSquare, Trash2, GripVertical,
 } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
   isToday, addMonths, subMonths, getDay, addDays, isBefore, startOfWeek,
 } from 'date-fns';
-import type { PlannedTask, Group, Area, Asset, User } from '../types';
+import type { PlannedTask, Group, Area, Asset, User, PPMChecklistStep } from '../types';
 import { useNotifications } from '../context/NotificationContext';
+import { useComply } from '../context/ComplyContext';
 
 type PlanTab = 'dashboard' | 'calendar' | 'tasks' | 'timeline';
 
@@ -919,6 +921,30 @@ function CreatePlanTaskModal({ groups, areas, assets, teamMembers, onClose, onSa
   const [assetId, setAssetId] = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
+  // ── Checklist state ────────────────────────────────────────────
+  const { templates: complyTemplates } = useComply();
+  type ChecklistMode = 'none' | 'select' | 'create';
+  const [checklistMode, setChecklistMode] = useState<ChecklistMode>('none');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [steps, setSteps] = useState<PPMChecklistStep[]>([]);
+  const [newStepText, setNewStepText] = useState('');
+
+  const addStep = () => {
+    const text = newStepText.trim();
+    if (!text) return;
+    setSteps(s => [...s, { id: `ns${Date.now()}`, text }]);
+    setNewStepText('');
+  };
+  const removeStep = (id: string) => setSteps(s => s.filter(st => st.id !== id));
+
+  const loadTemplate = (tplId: string) => {
+    setSelectedTemplateId(tplId);
+    const tpl = complyTemplates.find(t => t.id === tplId);
+    if (!tpl) { setSteps([]); return; }
+    const allItems = tpl.sections.flatMap(sec => sec.items);
+    setSteps(allItems.map(item => ({ id: `tpl_${item.id}`, text: item.label })));
+  };
+
   const selectedGroup = groups.find(g => g.id === groupId) ?? groups[0];
   const selectedArea = areas.find(a => a.id === areaId);
   const selectedAsset = assets.find(a => a.id === assetId);
@@ -945,6 +971,7 @@ function CreatePlanTaskModal({ groups, areas, assets, teamMembers, onClose, onSa
       assetId: assetId || undefined,
       assetName: selectedAsset?.name,
       assigneeIds,
+      checklistSteps: steps.length > 0 ? steps : undefined,
     });
   };
 
@@ -1104,6 +1131,126 @@ function CreatePlanTaskModal({ groups, areas, assets, teamMembers, onClose, onSa
             </div>
           </div>
 
+          {/* ── Checklist ── */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            {/* Header row */}
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+              <CheckSquare size={15} className="text-blue-500" />
+              <p className="text-sm font-semibold text-gray-700 flex-1">Checklist</p>
+              {steps.length > 0 && (
+                <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{steps.length} steps</span>
+              )}
+            </div>
+
+            {/* Mode selector */}
+            {checklistMode === 'none' && (
+              <div className="flex gap-2 p-3">
+                <button
+                  type="button"
+                  onClick={() => setChecklistMode('select')}
+                  className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-gray-500 hover:text-blue-600"
+                >
+                  <span className="text-xl">📋</span>
+                  <span className="text-xs font-semibold">Use template</span>
+                  <span className="text-[10px] text-gray-400">Pick from Comply library</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChecklistMode('create')}
+                  className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors text-gray-500 hover:text-green-600"
+                >
+                  <span className="text-xl">✏️</span>
+                  <span className="text-xs font-semibold">Create new</span>
+                  <span className="text-[10px] text-gray-400">Add steps manually</span>
+                </button>
+              </div>
+            )}
+
+            {/* Select template mode */}
+            {checklistMode === 'select' && (
+              <div className="p-3 space-y-3">
+                <select
+                  value={selectedTemplateId}
+                  onChange={e => loadTemplate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">— Select a template —</option>
+                  {complyTemplates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.sections.flatMap(s => s.items).length} items)
+                    </option>
+                  ))}
+                </select>
+
+                {steps.length > 0 && (
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {steps.map((step, i) => (
+                      <div key={step.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">{i + 1}</span>
+                        <span className="text-xs text-gray-700 flex-1">{step.text}</span>
+                        <button type="button" onClick={() => removeStep(step.id)} className="text-gray-300 hover:text-red-400">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button type="button" onClick={() => { setChecklistMode('none'); setSteps([]); setSelectedTemplateId(''); }}
+                    className="text-xs text-gray-400 hover:text-gray-600">Remove checklist</button>
+                  <button type="button" onClick={() => setChecklistMode('create')}
+                    className="text-xs text-blue-500 hover:text-blue-700 ml-auto">+ Add custom steps</button>
+                </div>
+              </div>
+            )}
+
+            {/* Create new mode */}
+            {checklistMode === 'create' && (
+              <div className="p-3 space-y-3">
+                {/* Existing steps */}
+                {steps.length > 0 && (
+                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                    {steps.map((step, i) => (
+                      <div key={step.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-50 group">
+                        <GripVertical size={12} className="text-gray-300 flex-shrink-0" />
+                        <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">{i + 1}</span>
+                        <span className="text-xs text-gray-700 flex-1">{step.text}</span>
+                        <button type="button" onClick={() => removeStep(step.id)}
+                          className="text-gray-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add step input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newStepText}
+                    onChange={e => setNewStepText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addStep(); } }}
+                    placeholder="Step description… (Enter to add)"
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <button type="button" onClick={addStep}
+                    className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold">
+                    Add
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 pt-0.5">
+                  <button type="button" onClick={() => { setChecklistMode('none'); setSteps([]); }}
+                    className="text-xs text-gray-400 hover:text-gray-600">Remove checklist</button>
+                  <button type="button" onClick={() => setChecklistMode('select')}
+                    className="text-xs text-blue-500 hover:text-blue-700 ml-auto">Use template instead</button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {selectedGroup && (
             <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex items-start gap-3">
               <span className="text-lg">{selectedGroup.icon}</span>
@@ -1111,6 +1258,7 @@ function CreatePlanTaskModal({ groups, areas, assets, teamMembers, onClose, onSa
                 <p className="text-xs font-semibold text-blue-800">Notification preview</p>
                 <p className="text-xs text-blue-600 mt-0.5">
                   📋 New PPM task "{title || 'Task title'}" will notify <strong>{selectedGroup.name}</strong>
+                  {steps.length > 0 && <> · <strong>{steps.length} checklist steps</strong></>}
                 </p>
               </div>
             </div>

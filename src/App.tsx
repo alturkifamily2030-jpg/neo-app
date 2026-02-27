@@ -23,17 +23,20 @@ import ChecklistRunPage from './pages/ChecklistRunPage';
 import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem('neo_auth') === '1');
+
+  const handleLogin = () => { localStorage.setItem('neo_auth', '1'); setIsLoggedIn(true); };
+  const handleLogout = () => { localStorage.removeItem('neo_auth'); setIsLoggedIn(false); };
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   return (
     <NotificationProvider>
     <ComplyProvider>
     <BrowserRouter>
-      <AppLayout onLogout={() => setIsLoggedIn(false)}>
+      <AppLayout onLogout={handleLogout}>
         <Routes>
           <Route path="/" element={<Navigate to="/fix" replace />} />
           <Route path="/fix" element={<FixPage />} />
