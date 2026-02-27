@@ -160,6 +160,7 @@ export const groups: Group[] = [
   { id: 'g17', name: 'Accident / Incident Reports', description: 'Keep track of any incidents', icon: '⚠️', color: '#ef4444', counts: { red: 0, yellow: 0, green: 1 }, notificationsOn: false, memberIds: ALL_MEMBERS },
   { id: 'g18', name: 'Butler', description: 'New group', icon: '🤵', color: '#10b981', counts: { red: 0, yellow: 0, green: 0 }, notificationsOn: false, memberIds: ALL_MEMBERS },
   { id: 'g19', name: 'Guest', description: 'Event Schedule', icon: '🎭', color: '#6b7280', counts: { red: 0, yellow: 0, green: 10 }, notificationsOn: false, memberIds: ALL_MEMBERS },
+  { id: 'g_family', name: 'Family', description: 'Family requests & tasks', icon: '🏡', color: '#8b5cf6', counts: { red: 0, yellow: 0, green: 0 }, notificationsOn: true, memberIds: ALL_MEMBERS },
 ];
 
 export const areas: Area[] = [

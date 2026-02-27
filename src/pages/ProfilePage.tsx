@@ -16,12 +16,14 @@ const ROLE_LABELS: Record<AccountRole, string> = {
   account_admin: 'Account Admin',
   group_admin:   'Group Admin',
   user:          'User',
+  family:        'Family',
 };
 
 const ROLE_COLORS: Record<AccountRole, string> = {
   account_admin: 'bg-red-100 text-red-700',
   group_admin:   'bg-purple-100 text-purple-700',
   user:          'bg-gray-100 text-gray-600',
+  family:        'bg-pink-100 text-pink-700',
 };
 
 const STATUS_DOT: Record<User['status'], string> = {

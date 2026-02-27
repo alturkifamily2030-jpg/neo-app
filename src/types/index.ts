@@ -7,7 +7,7 @@ export interface User {
   email: string;
   avatar?: string;
   role: string;                  // job title (Maintenance Supervisor, etc.)
-  accountRole?: 'account_admin' | 'group_admin' | 'user'; // Snapfix permission tier
+  accountRole?: 'account_admin' | 'group_admin' | 'user' | 'family'; // Snapfix permission tier
   phone?: string;
   status: 'online' | 'away' | 'offline';
   groupIds: string[];

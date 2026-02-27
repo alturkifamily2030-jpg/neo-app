@@ -3,6 +3,7 @@ import { X, Upload, Camera, Image, Trash2, AlertCircle, ChevronDown } from 'luci
 import type { Task, Priority, TaskStatus } from '../../types';
 import CameraCapture from '../ui/CameraCapture';
 import { useNotifications } from '../../context/NotificationContext';
+import { currentUser } from '../../data/mockData';
 
 interface CreateTaskModalProps {
   onClose: () => void;
@@ -14,9 +15,14 @@ interface CreateTaskModalProps {
 export default function CreateTaskModal({ onClose, onSave, defaultGroupId, initialPhoto }: CreateTaskModalProps) {
   const { groups, areas, teamMembers } = useNotifications();
 
+  // If the current user is Family role, always route to the Family group
+  const currentUserData = teamMembers.find(u => u.id === currentUser.id);
+  const isFamilyUser = currentUserData?.accountRole === 'family';
+  const effectiveDefaultGroupId = isFamilyUser ? 'g_family' : (defaultGroupId ?? groups[0]?.id ?? '');
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [groupId, setGroupId] = useState(defaultGroupId ?? (groups[0]?.id ?? ''));
+  const [groupId, setGroupId] = useState(effectiveDefaultGroupId);
   const [areaId, setAreaId] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<TaskStatus>('open');
@@ -34,7 +40,17 @@ export default function CreateTaskModal({ onClose, onSave, defaultGroupId, initi
   const activeTags = selectedGroup?.activeTags ?? { location: true, equipment: true, category: true };
   const tagsRequired = selectedGroup?.tagsRequired ?? {};
   const blockGallery = selectedGroup?.blockGalleryPhotos ?? false;
-  const groupMembers = teamMembers.filter(u => selectedGroup?.memberIds.includes(u.id));
+
+  // Family users can only assign to User or Account Admin roles
+  const assignableMembers = isFamilyUser
+    ? teamMembers.filter(u => u.accountRole === 'user' || u.accountRole === 'account_admin')
+    : teamMembers.filter(u => selectedGroup?.memberIds.includes(u.id));
+  const groupMembers = assignableMembers;
+
+  // Groups available for selection (Family users locked to their joined groups)
+  const availableGroups = isFamilyUser
+    ? groups.filter(g => !g.archived && (currentUserData?.groupIds?.includes(g.id) || g.id === 'g_family'))
+    : groups.filter(g => !g.archived);
 
   const validate = (): string[] => {
     const errs: string[] = [];
@@ -139,11 +155,22 @@ export default function CreateTaskModal({ onClose, onSave, defaultGroupId, initi
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Group *</label>
-              <select value={groupId} onChange={e => { setGroupId(e.target.value); setErrors([]); }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                {groups.filter(g => !g.archived).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Group *
+                {isFamilyUser && <span className="ml-1.5 text-[10px] font-semibold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full">Family</span>}
+              </label>
+              {isFamilyUser && availableGroups.length === 1 ? (
+                <div className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-700 flex items-center gap-2">
+                  <span>{availableGroups[0]?.icon}</span>
+                  <span>{availableGroups[0]?.name}</span>
+                  <span className="ml-auto text-xs text-gray-400">Auto-assigned</span>
+                </div>
+              ) : (
+                <select value={groupId} onChange={e => { setGroupId(e.target.value); setErrors([]); }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                  {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

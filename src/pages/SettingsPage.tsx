@@ -7,7 +7,7 @@ import {
   Shield, Edit2, Camera, Zap, Building2, Database,
   CheckSquare, Wrench, Calendar, Package, AlertTriangle,
   Clock, LogOut, Fingerprint, Laptop, QrCode, MessageSquare,
-  BarChart2, MapPin, Hash,
+  BarChart2, MapPin, Hash, UserPlus, Trash2, Home,
 } from 'lucide-react';
 import { currentUser } from '../data/mockData';
 import { useNotifications } from '../context/NotificationContext';
@@ -24,7 +24,30 @@ type Section =
   | 'integrations'
   | 'security'
   | 'workspace'
-  | 'about';
+  | 'about'
+  | 'team';
+
+/* ── Role helpers ── */
+type AccountRole = 'account_admin' | 'group_admin' | 'user' | 'family';
+const ROLE_LABELS: Record<AccountRole, string> = {
+  account_admin: 'Account Admin',
+  group_admin:   'Group Admin',
+  user:          'User',
+  family:        'Family',
+};
+const ROLE_COLORS: Record<AccountRole, string> = {
+  account_admin: 'bg-blue-100 text-blue-700',
+  group_admin:   'bg-purple-100 text-purple-700',
+  user:          'bg-gray-100 text-gray-700',
+  family:        'bg-pink-100 text-pink-700',
+};
+function RoleBadge({ role }: { role: AccountRole }) {
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[role]}`}>
+      {ROLE_LABELS[role]}
+    </span>
+  );
+}
 
 /* ── Tag categories ── */
 type TagCategory = 'location' | 'equipment' | 'category';
@@ -1233,6 +1256,280 @@ function AboutSection({ onBack }: { onBack: () => void }) {
   );
 }
 
+/* ── Team Members Section ── */
+function TeamMembersSection({ onBack }: { onBack: () => void }) {
+  const { teamMembers, addUser, updateUser, deleteUser, groups } = useNotifications();
+  const [showInvite, setShowInvite] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Invite form state
+  const [invName,    setInvName]    = useState('');
+  const [invEmail,   setInvEmail]   = useState('');
+  const [invRole,    setInvRole]    = useState<AccountRole>('user');
+  const [invGroups,  setInvGroups]  = useState<string[]>(['g_family']);
+  const [invSent,    setInvSent]    = useState(false);
+
+  const resetInvite = () => {
+    setInvName(''); setInvEmail(''); setInvRole('user');
+    setInvGroups(['g_family']); setInvSent(false);
+  };
+
+  const sendInvite = () => {
+    if (!invName.trim() || !invEmail.trim()) return;
+    const newUser = {
+      id:          `u_${Date.now()}`,
+      name:        invName.trim(),
+      email:       invEmail.trim(),
+      role:        invRole === 'family' ? 'Family Member' : invRole === 'account_admin' ? 'Account Admin' : invRole === 'group_admin' ? 'Group Admin' : 'User',
+      accountRole: invRole as 'account_admin' | 'group_admin' | 'user' | 'family',
+      status:      'offline' as const,
+      groupIds:    invRole === 'family' ? invGroups : [],
+      invitedAt:   new Date(),
+      accepted:    false,
+    };
+    addUser(newUser);
+    setInvSent(true);
+    setTimeout(() => { setShowInvite(false); resetInvite(); }, 1800);
+  };
+
+  const toggleInvGroup = (gid: string) => {
+    setInvGroups(prev => prev.includes(gid) ? prev.filter(x => x !== gid) : [...prev, gid]);
+  };
+
+  const staffMembers  = teamMembers.filter(u => u.accountRole !== 'family');
+  const familyMembers = teamMembers.filter(u => u.accountRole === 'family');
+
+  const MemberRow = ({ user }: { user: typeof teamMembers[0] }) => {
+    const role = (user.accountRole ?? 'user') as AccountRole;
+    const isEditing = editingId === user.id;
+    const userGroups = groups.filter(g => user.groupIds?.includes(g.id));
+
+    return (
+      <div className="flex items-start gap-3 px-4 py-3 border-b border-gray-100 last:border-b-0">
+        <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+          {user.name.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+            <RoleBadge role={role} />
+            {user.accepted === false && (
+              <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Pending</span>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 truncate">{user.email}</p>
+          {role === 'family' && userGroups.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {userGroups.map(g => (
+                <span key={g.id} className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 rounded-full px-1.5 py-0.5">
+                  {g.icon} {g.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {isEditing && role === 'family' && (
+            <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden">
+              <p className="text-[11px] font-semibold text-gray-500 px-3 py-1.5 bg-gray-50 border-b border-gray-100">Groups access</p>
+              {groups.filter(g => !g.archived).map(g => (
+                <label key={g.id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-b-0">
+                  <input
+                    type="checkbox"
+                    checked={user.groupIds?.includes(g.id) ?? false}
+                    onChange={() => {
+                      const current = user.groupIds ?? [];
+                      updateUser(user.id, { groupIds: current.includes(g.id) ? current.filter(x => x !== g.id) : [...current, g.id] });
+                    }}
+                    className="rounded accent-purple-600"
+                  />
+                  <span className="text-base">{g.icon}</span>
+                  <span className="text-xs text-gray-700">{g.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+          {role === 'family' && (
+            <button
+              onClick={() => setEditingId(isEditing ? null : user.id)}
+              className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors"
+              title="Edit groups"
+            >
+              <Edit2 size={13} />
+            </button>
+          )}
+          <button
+            onClick={() => { if (window.confirm(`Remove ${user.name}?`)) deleteUser(user.id); }}
+            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors"
+            title="Remove"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      <SectionHeader title="Team Members" onBack={onBack} />
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4">
+
+        {/* Invite button */}
+        <button
+          onClick={() => setShowInvite(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-semibold text-sm transition-colors"
+        >
+          <UserPlus size={16} /> Invite Team Member
+        </button>
+
+        {/* Staff */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+            <Users size={13} className="text-gray-400" />
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Staff ({staffMembers.length})</p>
+          </div>
+          {staffMembers.map(u => <MemberRow key={u.id} user={u} />)}
+        </div>
+
+        {/* Family */}
+        <div className="bg-white rounded-2xl border border-pink-100 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-pink-50 border-b border-pink-100">
+            <Home size={13} className="text-pink-400" />
+            <p className="text-[11px] font-bold text-pink-500 uppercase tracking-widest">Family ({familyMembers.length})</p>
+            <span className="ml-auto text-[10px] text-pink-400">Managed by Account Admin</span>
+          </div>
+          {familyMembers.length === 0 ? (
+            <p className="text-xs text-gray-400 px-4 py-4 text-center">No family members yet. Invite with the button above.</p>
+          ) : (
+            familyMembers.map(u => <MemberRow key={u.id} user={u} />)
+          )}
+          {/* Family role info */}
+          <div className="px-4 py-3 bg-pink-50/50 border-t border-pink-100">
+            <p className="text-[11px] text-pink-600 font-medium mb-1">Family role permissions</p>
+            <ul className="space-y-0.5">
+              {[
+                'Can choose which groups to join',
+                'Can view all tasks and activity',
+                'Can create tasks → auto-routed to Family group',
+                'Can assign tasks to User or Account Admin only',
+                'Can generate reports',
+                'Not visible in regular staff lists',
+              ].map(p => (
+                <li key={p} className="flex items-start gap-1.5 text-[10px] text-pink-500">
+                  <Check size={9} className="mt-0.5 flex-shrink-0" /> {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-900">Invite Team Member</h2>
+              <button onClick={() => { setShowInvite(false); resetInvite(); }} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={16} />
+              </button>
+            </div>
+
+            {invSent ? (
+              <div className="flex flex-col items-center py-10 gap-3">
+                <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+                  <Check size={28} className="text-green-600" />
+                </div>
+                <p className="text-sm font-semibold text-gray-900">Invitation sent!</p>
+                <p className="text-xs text-gray-400">{invEmail}</p>
+              </div>
+            ) : (
+              <div className="p-5 space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    value={invName}
+                    onChange={e => setInvName(e.target.value)}
+                    placeholder="e.g. Sarah Johnson"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {/* Email */}
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    value={invEmail}
+                    onChange={e => setInvEmail(e.target.value)}
+                    placeholder="e.g. sarah@example.com"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {/* Role */}
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 block mb-1">Role</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['account_admin', 'group_admin', 'user', 'family'] as AccountRole[]).map(r => (
+                      <button
+                        key={r}
+                        onClick={() => { setInvRole(r); if (r === 'family') setInvGroups(['g_family']); }}
+                        className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 text-left transition-colors ${invRole === r ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      >
+                        <RoleBadge role={r} />
+                        <p className="text-[10px] text-gray-500 leading-tight">
+                          {r === 'account_admin' && 'Full control over all groups and members'}
+                          {r === 'group_admin'   && 'Manage assigned groups and their tasks'}
+                          {r === 'user'          && 'Create and manage tasks in their groups'}
+                          {r === 'family'        && 'Submit requests, choose groups, see status'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Family: group selector */}
+                {invRole === 'family' && (
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 block mb-1">Groups they can join</label>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-44 overflow-y-auto">
+                      {groups.filter(g => !g.archived).map(g => (
+                        <label key={g.id} className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-b-0">
+                          <input
+                            type="checkbox"
+                            checked={invGroups.includes(g.id)}
+                            onChange={() => toggleInvGroup(g.id)}
+                            className="rounded accent-purple-600"
+                          />
+                          <span className="text-base">{g.icon}</span>
+                          <span className="text-xs text-gray-700 font-medium">{g.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Family group is always included. Tasks auto-route there.</p>
+                  </div>
+                )}
+
+                {/* Send */}
+                <button
+                  onClick={sendInvite}
+                  disabled={!invName.trim() || !invEmail.trim()}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Mail size={15} /> Send Invitation
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Settings Page ── */
 export default function SettingsPage() {
   const { teamMembers, groups } = useNotifications();
@@ -1254,6 +1551,7 @@ export default function SettingsPage() {
   if (section === 'security')      return <SecuritySection      onBack={() => setSection(null)} />;
   if (section === 'workspace')     return <WorkspaceSection     onBack={() => setSection(null)} />;
   if (section === 'about')         return <AboutSection         onBack={() => setSection(null)} />;
+  if (section === 'team')          return <TeamMembersSection   onBack={() => setSection(null)} />;
 
   /* ── Main menu ── */
   return (
@@ -1297,7 +1595,14 @@ export default function SettingsPage() {
             <SettingsRow icon={<Building2 size={16} />} label="Organization"   value="Grand Hyatt Dubai"  onClick={() => setSection('workspace')} />
             <SettingsRow icon={<Bell size={16}  />}     label="Notifications"  value={`${notifsOn > 0 ? notifsOn + ' groups on' : 'All off'}`} onClick={() => setSection('notifications')} />
             <SettingsRow icon={<Users size={16} />}     label="Group Settings" value={`${groups.length} groups`} onClick={() => setSection('groups')} />
-            <SettingsRow icon={<Tag size={16}   />}     label="Tags"           value={`${totalTags} tags`} onClick={() => setSection('tags')} last />
+            <SettingsRow icon={<Tag size={16}   />}     label="Tags"           value={`${totalTags} tags`} onClick={() => setSection('tags')} />
+            <SettingsRow
+              icon={<UserPlus size={16} />}
+              label="Team Members"
+              value={`${teamMembers.length} members · ${teamMembers.filter(u => u.accountRole === 'family').length} family`}
+              onClick={() => setSection('team')}
+              last
+            />
           </SettingsGroup>
 
           {/* Preferences */}
