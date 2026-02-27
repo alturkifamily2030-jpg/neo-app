@@ -40,6 +40,7 @@ interface NotificationContextType {
   // Chat channels shared state
   chatChannels: ChatChannel[];
   addChatChannel: (c: ChatChannel) => void;
+  updateChatChannel: (id: string, changes: Partial<ChatChannel>) => void;
   // Chat messages shared state
   chatMessages: ChatMessage[];
   addChatMessage: (m: ChatMessage) => void;
@@ -283,6 +284,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // ── Chat ──────────────────────────────────────────────────────────────
   const addChatChannel = (c: ChatChannel) => setChatChannels(prev => [...prev, c]);
+  const updateChatChannel = (id: string, changes: Partial<ChatChannel>) =>
+    setChatChannels(prev => prev.map(c => c.id === id ? { ...c, ...changes } : c));
   const addChatMessage = (m: ChatMessage) => {
     setChatMessages(prev => [...prev, m]);
     setTimeout(() => broadcastUpdate('chat_updated'), 100);
@@ -346,7 +349,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       notifications, systemMessages, addNotification, addSystemMessage, markAllRead, unreadCount,
       plannedTasks, addPlannedTask, updatePlannedTask, deletePlannedTask,
       assets, addAsset, updateAsset, deleteAsset,
-      chatChannels, addChatChannel,
+      chatChannels, addChatChannel, updateChatChannel,
       chatMessages, addChatMessage, updateChatMessage, toggleReaction, pinMessage,
       teamMembers, addUser, updateUser, deleteUser,
       tasks, addTask, updateTask, deleteTask,

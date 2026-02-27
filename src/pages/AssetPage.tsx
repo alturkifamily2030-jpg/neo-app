@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Package, MapPin, Tag, Hash, Calendar, Wrench,
@@ -10,6 +10,7 @@ import {
 import { format, differenceInDays, subMonths } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNotifications } from '../context/NotificationContext';
+import QRCodeCanvas, { downloadCanvasAsPng, printQRCode } from '../components/ui/QRCodeCanvas';
 import type { Asset, MaintenanceRecord, AssetDocument, Priority, Group } from '../types';
 
 type Tab = 'details' | 'maintenance' | 'documents' | 'tasks' | 'photos' | 'qrtag';
@@ -81,6 +82,9 @@ export default function AssetPage() {
   const [showUploadDoc, setShowUploadDoc] = useState(false);
   const [showPrintQR, setShowPrintQR] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
+  const [showNfcInfo, setShowNfcInfo] = useState(false);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const handleQRReady = useCallback((canvas: HTMLCanvasElement) => { qrCanvasRef.current = canvas; }, []);
 
   // edit state
   const [editName,   setEditName]   = useState('');
@@ -718,38 +722,30 @@ export default function AssetPage() {
           {/* ════ QR / TAG ════ */}
           {tab === 'qrtag' && (
             <>
-              {/* QR Code placeholder */}
+              {/* QR Code — real scannable */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center gap-4">
                 <h3 className="text-sm font-semibold text-gray-700 self-start">QR Code</h3>
-                <div className="w-48 h-48 border-4 border-gray-200 rounded-xl p-3 flex items-center justify-center">
-                  <svg viewBox="0 0 100 100" className="w-full h-full text-gray-800">
-                    <rect x="5" y="5" width="28" height="28" rx="3" fill="none" stroke="currentColor" strokeWidth="5"/>
-                    <rect x="12" y="12" width="14" height="14" rx="1" fill="currentColor"/>
-                    <rect x="67" y="5" width="28" height="28" rx="3" fill="none" stroke="currentColor" strokeWidth="5"/>
-                    <rect x="74" y="12" width="14" height="14" rx="1" fill="currentColor"/>
-                    <rect x="5" y="67" width="28" height="28" rx="3" fill="none" stroke="currentColor" strokeWidth="5"/>
-                    <rect x="12" y="74" width="14" height="14" rx="1" fill="currentColor"/>
-                    {[42,49,56,63].map(x => [42,49,56,63].map(y => (
-                      Math.sin(x * y) > 0 && <rect key={`${x}${y}`} x={x} y={y} width="6" height="6" fill="currentColor"/>
-                    )))}
-                    <rect x="42" y="5" width="6" height="6" fill="currentColor"/>
-                    <rect x="56" y="5" width="6" height="6" fill="currentColor"/>
-                    <rect x="5"  y="42" width="6" height="6" fill="currentColor"/>
-                    <rect x="5"  y="56" width="6" height="6" fill="currentColor"/>
-                    <rect x="88" y="42" width="6" height="6" fill="currentColor"/>
-                    <rect x="88" y="56" width="6" height="6" fill="currentColor"/>
-                    <rect x="49" y="88" width="6" height="6" fill="currentColor"/>
-                    <rect x="63" y="88" width="6" height="6" fill="currentColor"/>
-                  </svg>
-                </div>
+                <QRCodeCanvas
+                  value={`${window.location.origin}/assets/${asset.id}`}
+                  size={192}
+                  onReady={handleQRReady}
+                />
                 <p className="text-sm font-mono text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">{asset.qrCode}</p>
                 <p className="text-xs text-gray-400 text-center max-w-xs">
                   Scan this code to instantly access this asset's profile, log issues, or create work orders.
                 </p>
-                <button onClick={() => setShowPrintQR(true)}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                  <QrCode size={16} /> Print QR Label
-                </button>
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => qrCanvasRef.current && printQRCode(qrCanvasRef.current, asset.name)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                    <QrCode size={16} /> Print Label
+                  </button>
+                  <button
+                    onClick={() => qrCanvasRef.current && downloadCanvasAsPng(qrCanvasRef.current, `qr-${asset.name}.png`)}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+                    Download PNG
+                  </button>
+                </div>
               </div>
 
               {/* NFC Tag */}
@@ -770,7 +766,7 @@ export default function AssetPage() {
                   <div className="flex flex-col items-center py-6 text-center">
                     <Wifi size={32} className="text-gray-200 mb-3" strokeWidth={1.5} />
                     <p className="text-sm text-gray-400 mb-3">No NFC tag linked to this asset</p>
-                    <button className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                    <button onClick={() => setShowNfcInfo(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
                       <Plus size={14} /> Link NFC Tag
                     </button>
                   </div>
@@ -818,6 +814,23 @@ export default function AssetPage() {
 
       {/* Print QR Modal */}
       {showPrintQR && <PrintQRModal asset={asset} onClose={() => setShowPrintQR(false)} />}
+
+      {/* NFC Info Modal */}
+      {showNfcInfo && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <Wifi size={36} className="text-blue-500 mx-auto mb-3" />
+            <h3 className="text-base font-semibold text-gray-900 mb-2">NFC Smart Tags</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Linking an NFC tag requires a physical NFC sticker/tag and an NFC-capable mobile device. In production, tap your phone to the tag to pair it with this asset — staff can then tap to open the asset profile instantly without scanning a QR code.
+            </p>
+            <button onClick={() => setShowNfcInfo(false)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-sm font-semibold">
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Report Issue Modal */}
       {showReportIssue && (

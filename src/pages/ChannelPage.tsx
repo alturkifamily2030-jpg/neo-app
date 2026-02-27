@@ -349,6 +349,7 @@ export default function ChannelPage() {
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const channel = chatChannels.find(c => c.id === id);
   const isMuted = id ? muted.has(id) : false;
@@ -427,6 +428,27 @@ export default function ChannelPage() {
     setInput('');
     setReplyingTo(null);
     simulateTyping();
+  };
+
+  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const isImage = file.type.startsWith('image/');
+      addChatMessage({
+        id: `m${Date.now()}`,
+        userId: currentUser.id,
+        userName: 'You',
+        text: `📎 ${file.name}`,
+        timestamp: new Date(),
+        channel: id!,
+        ...(isImage ? { image: dataUrl } : {}),
+      });
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const submitEdit = (msgId: string) => {
@@ -876,8 +898,10 @@ export default function ChannelPage() {
           </>
         )}
         <form onSubmit={sendMessage} className="flex items-center gap-2">
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xlsx,.csv" className="hidden" onChange={handleFileAttach} />
           <button
             type="button"
+            onClick={() => fileInputRef.current?.click()}
             className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
             title="Attach file"
           >
@@ -909,8 +933,9 @@ export default function ChannelPage() {
           ) : (
             <button
               type="button"
+              title="Voice messages not available in this demo"
+              onClick={() => alert('Voice messages require a native mobile app. Use text or attach a file instead.')}
               className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
-              title="Voice message"
             >
               <Mic size={18} />
             </button>

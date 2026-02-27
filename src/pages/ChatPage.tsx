@@ -228,7 +228,7 @@ function NewActionMenu({
 /* ── Main Component ── */
 export default function ChatPage() {
   const navigate = useNavigate();
-  const { chatMessages, chatChannels, addChatChannel, teamMembers } = useNotifications();
+  const { chatMessages, chatChannels, addChatChannel, updateChatChannel, teamMembers } = useNotifications();
   const { muted } = useMuteChannels();
 
   const [search, setSearch] = useState('');
@@ -316,7 +316,7 @@ export default function ChatPage() {
       },
       {
         label: 'Mark as read',
-        onClick: () => { /* unread count managed by channel data */ },
+        onClick: () => updateChatChannel(channel.id, { unread: 0 }),
       },
     ];
 

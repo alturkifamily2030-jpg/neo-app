@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import QRScanner from '../components/ui/QRScanner';
 import {
@@ -13,6 +13,7 @@ import { plannedTasks as allPlanned } from '../data/mockData';
 import { useNotifications } from '../context/NotificationContext';
 import type { Task, Group } from '../types';
 import CreateTaskModal from '../components/fix/CreateTaskModal';
+import QRCodeCanvas, { downloadCanvasAsPng, printQRCode } from '../components/ui/QRCodeCanvas';
 
 type GroupTab = 'tasks' | 'planned';
 type StatusFilter = 'open' | 'in_progress' | 'done';
@@ -459,6 +460,8 @@ export default function GroupPage() {
 function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void }) {
   const navigate = useNavigate();
   const { updateGroup, deleteGroup, teamMembers } = useNotifications();
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const handleQRReady = useCallback((canvas: HTMLCanvasElement) => { qrCanvasRef.current = canvas; }, []);
 
   type SettingsSection = 'main' | 'general' | 'traffic' | 'members' | 'notifications' | 'tags' | 'qr';
 
@@ -986,26 +989,22 @@ function GroupSettingsView({ group, onBack }: { group: Group; onBack: () => void
         <SectionHeader title="QR Code" />
         <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col items-center">
-            {/* Mock QR Code */}
-            <div className="w-40 h-40 bg-gray-100 rounded-xl border-2 border-gray-200 flex items-center justify-center mb-4 relative overflow-hidden">
-              <div className="grid grid-cols-8 gap-0.5 w-full h-full p-3">
-                {Array.from({ length: 64 }).map((_, i) => (
-                  <div key={i} className={`rounded-sm ${Math.random() > 0.4 ? 'bg-gray-800' : 'bg-transparent'}`} />
-                ))}
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-xl shadow-sm">
-                  {group.icon}
-                </div>
-              </div>
-            </div>
-            <p className="text-sm font-semibold text-gray-900 mb-1">{group.name}</p>
+            <QRCodeCanvas
+              value={`${window.location.origin}/fix/group/${group.id}`}
+              size={180}
+              onReady={handleQRReady}
+            />
+            <p className="text-sm font-semibold text-gray-900 mt-4 mb-1">{group.name}</p>
             <p className="text-xs text-gray-400 text-center mb-5">Anyone scanning this QR code can instantly submit a task to this group — no app required.</p>
             <div className="flex gap-3 w-full">
-              <button className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Download PDF
+              <button
+                onClick={() => qrCanvasRef.current && printQRCode(qrCanvasRef.current, group.name)}
+                className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Print / PDF
               </button>
-              <button className="flex-1 bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-2.5 text-sm font-medium">
+              <button
+                onClick={() => qrCanvasRef.current && downloadCanvasAsPng(qrCanvasRef.current, `qr-${group.name}.png`)}
+                className="flex-1 bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-2.5 text-sm font-medium">
                 Download PNG
               </button>
             </div>

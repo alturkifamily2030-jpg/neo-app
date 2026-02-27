@@ -216,6 +216,81 @@ export default function DashboardPage() {
     setGeneratedReports(p => ({ ...p, [key]: true }));
   };
 
+  const openPrintWindow = (title: string, body: string) => {
+    const win = window.open('', '_blank', 'width=860,height=700');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+<style>body{font-family:Inter,sans-serif;padding:32px;color:#111}h1{font-size:22px;margin:0 0 4px}
+.meta{color:#888;font-size:13px;margin-bottom:24px}.card{border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.open{background:#fee2e2;color:#dc2626}.in_progress{background:#fef3c7;color:#d97706}.done{background:#dcfce7;color:#16a34a}
+.high{background:#fee2e2;color:#dc2626}.medium{background:#fef3c7;color:#d97706}.low{background:#f3f4f6;color:#6b7280}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #f3f4f6}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+@media print{button{display:none!important}}
+</style></head><body>
+<h1>${title}</h1><p class="meta">Generated ${format(new Date(), 'PPP · p')} · NEO Facility Management</p>
+${body}
+<br/><button onclick="window.print()" style="padding:10px 24px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">Print / Save as PDF</button>
+</body></html>`);
+    win.document.close();
+  };
+
+  const generateMultitaskReport = () => {
+    const cards = filteredTasks.map(t => `
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          ${t.image ? `<img src="${t.image}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0" />` : ''}
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:15px;margin-bottom:4px">${t.title}</div>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:6px">${t.groupName} · ${format(t.createdAt, 'PP')}</div>
+            <span class="badge ${t.status}">${t.status.replace('_',' ')}</span>
+            <span class="badge ${t.priority}" style="margin-left:4px">${t.priority}</span>
+            ${t.description ? `<p style="margin:8px 0 0;font-size:13px;color:#374151">${t.description}</p>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+    openPrintWindow('Multi-Task Report', `<p style="margin-bottom:16px;color:#4b5563">${filteredTasks.length} tasks shown</p>${cards}`);
+    markGenerated('multitask');
+  };
+
+  const generateTimeReport = () => {
+    const entries = filteredTasks.flatMap(t =>
+      (t.timeEntries ?? []).map(e => ({ task: t.title, group: t.groupName, user: e.userName, date: e.date, mins: e.minutes, note: e.note ?? '' }))
+    ).sort((a, b) => b.date.getTime() - a.date.getTime());
+    if (entries.length === 0) {
+      downloadCSV([{ 'Notice': 'No time entries logged yet' }], 'neo-time-report.csv');
+    } else {
+      const data = entries.map(e => ({ 'Task': e.task, 'Group': e.group, 'User': e.user, 'Date': format(e.date, 'yyyy-MM-dd'), 'Minutes': e.mins, 'Hours': (e.mins/60).toFixed(2), 'Note': e.note }));
+      downloadCSV(data, 'neo-time-report.csv');
+    }
+    markGenerated('time');
+  };
+
+  const generateChecklistReport = () => {
+    const rows = filteredTasks.flatMap(t =>
+      (t.subtasks ?? []).map(s => ({ 'Task': t.title, 'Group': t.groupName, 'Status': t.status, 'Checklist Item': s.text, 'Done': s.done ? 'Yes' : 'No', 'Created': format(t.createdAt, 'yyyy-MM-dd') }))
+    );
+    if (rows.length === 0) {
+      const cards = filteredTasks.slice(0, 50).map(t => `<div class="card"><b>${t.title}</b> <span class="badge ${t.status}">${t.status}</span><br/><span style="font-size:12px;color:#6b7280">${t.groupName} · ${format(t.createdAt,'PP')}</span></div>`).join('');
+      openPrintWindow('Checklist Report', `<p style="color:#6b7280;margin-bottom:16px">No subtasks found — showing task overview (${filteredTasks.length} tasks)</p>${cards}`);
+    } else {
+      downloadCSV(rows, 'neo-checklist-report.csv');
+    }
+    markGenerated('checklist');
+  };
+
+  const generateInspectionReport = () => {
+    const body = inspections.slice(0,30).map(i => `
+      <div class="card">
+        <div style="font-weight:600">${i.templateName}</div>
+        <div style="font-size:12px;color:#6b7280;margin:4px 0">${format(i.scheduledAt,'PP')} · ${i.status}${i.assigneeName ? ' · ' + i.assigneeName : ''}</div>
+        ${i.score !== undefined ? `<div>Score: <b>${i.score}%</b></div>` : ''}
+      </div>`).join('');
+    openPrintWindow('Inspection Report', `<p style="margin-bottom:16px;color:#4b5563">${inspections.length} inspection runs</p>${body}`);
+    markGenerated('inspection');
+  };
+
   const STATUS_DOT: Record<string, string> = {
     open: 'bg-red-400', in_progress: 'bg-yellow-400', done: 'bg-green-400',
   };
@@ -646,7 +721,7 @@ export default function DashboardPage() {
                 desc: 'Visual task summary including photos, ideal for sharing with contractors and surveyors.',
                 badge: 'PDF',
                 badgeCls: 'bg-red-100 text-red-700',
-                onDownload: () => markGenerated('multitask'),
+                onDownload: generateMultitaskReport,
                 onView: () => navigate('/dashboard/overview'),
               },
               {
@@ -666,7 +741,7 @@ export default function DashboardPage() {
                 desc: 'Task timestamps, response times, and duration analytics from open to completion.',
                 badge: 'Excel',
                 badgeCls: 'bg-green-100 text-green-700',
-                onDownload: () => markGenerated('time'),
+                onDownload: generateTimeReport,
                 onView: () => navigate('/dashboard/areas'),
               },
               {
@@ -676,7 +751,7 @@ export default function DashboardPage() {
                 desc: 'Task-level summary with individual checklist item responses and full audit log.',
                 badge: 'PDF',
                 badgeCls: 'bg-red-100 text-red-700',
-                onDownload: () => markGenerated('checklist'),
+                onDownload: generateChecklistReport,
                 onView: () => navigate('/comply'),
               },
               {
@@ -686,7 +761,7 @@ export default function DashboardPage() {
                 desc: 'Visual representation of inspection checklists, ideal for compliance documentation and regulator audits.',
                 badge: 'PDF',
                 badgeCls: 'bg-red-100 text-red-700',
-                onDownload: () => markGenerated('inspection'),
+                onDownload: generateInspectionReport,
                 onView: () => navigate('/comply'),
               },
               {
