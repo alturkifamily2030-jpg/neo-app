@@ -142,15 +142,27 @@ export default function AppLayout({ children, onLogout }: AppLayoutProps) {
                     </div>
                   ) : (
                     notifications.map(n => (
-                      <div key={n.id} className="flex gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50">
+                      <div
+                        key={n.id}
+                        onClick={() => { setShowNotifs(false); if (n.taskId) navigate(`/fix/task/${n.taskId}`); }}
+                        className={`flex gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 ${n.taskId ? 'cursor-pointer' : ''}`}
+                      >
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0 mt-0.5"
                           style={{ backgroundColor: n.groupColor + '20' }}
                         >
-                          {n.groupIcon}
+                          {n.type === 'reminder' ? '⏰' : n.groupIcon}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{n.title}</p>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-gray-900 flex-1 leading-tight">{n.title}</p>
+                            {n.type === 'new_task' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 flex-shrink-0 mt-0.5">NEW</span>
+                            )}
+                            {n.type === 'reminder' && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 flex-shrink-0 mt-0.5">REMINDER</span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 mt-0.5">{n.body}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span
@@ -160,7 +172,7 @@ export default function AppLayout({ children, onLogout }: AppLayoutProps) {
                               {n.groupIcon} {n.groupName}
                             </span>
                             <span className="text-[10px] text-gray-400">
-                              {format(n.timestamp, 'HH:mm')}
+                              {format(n.timestamp, 'dd MMM, HH:mm')}
                             </span>
                           </div>
                         </div>

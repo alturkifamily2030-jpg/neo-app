@@ -115,6 +115,7 @@ export interface Task {
   activityLog?: TaskActivity[];
   subtasks?: TaskSubtask[];
   timeEntries?: TaskTimeEntry[];
+  lastReminderAt?: string; // ISO string — updated each time a 24h reminder fires
 }
 
 export interface Comment {

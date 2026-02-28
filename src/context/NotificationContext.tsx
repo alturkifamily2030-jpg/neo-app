@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { plannedTasks as initialPlanned, assets as initialAssets, chatMessages as initialMessages, chatChannels as initialChannels, teamMembers as initialUsers, tasks as initialTasks, groups as initialGroups, areas as initialAreas } from '../data/mockData';
 import type { PlannedTask, Asset, ChatMessage, ChatChannel, User, Task, Group, Area } from '../types';
 
@@ -11,6 +11,8 @@ export interface AppNotification {
   groupIcon: string;
   timestamp: Date;
   read: boolean;
+  type?: 'new_task' | 'reminder';
+  taskId?: string;
 }
 
 export interface SystemChatMessage {
@@ -202,6 +204,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => { try { localStorage.setItem('neo_groups', JSON.stringify(groups)); } catch {} }, [groups]);
   useEffect(() => { try { localStorage.setItem('neo_areas', JSON.stringify(areas)); } catch {} }, [areas]);
 
+  // ── Refs for stable access in callbacks ───────────────────────────────
+  const tasksRef = useRef<Task[]>(tasks);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+  const groupsRef = useRef<Group[]>(groups);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
   // ── BroadcastChannel for cross-tab sync ────────────────────────────────
   const bcRef = useRef<BroadcastChannel | null>(null);
   useEffect(() => {
@@ -253,6 +261,58 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } catch {}
     }
   };
+
+  // ── 24-hour assignee reminders ─────────────────────────────────────────
+  const MS_24H = 24 * 60 * 60 * 1000;
+
+  const checkReminders = useCallback(() => {
+    const now = Date.now();
+    const currentTasks = tasksRef.current;
+    const currentGroups = groupsRef.current;
+
+    const toRemind = currentTasks.filter(t => {
+      if (t.status === 'done' || t.assignees.length === 0) return false;
+      const last = t.lastReminderAt ? new Date(t.lastReminderAt).getTime() : 0;
+      return now - last >= MS_24H;
+    });
+
+    if (toRemind.length === 0) return;
+
+    // Update lastReminderAt
+    const newTime = new Date().toISOString();
+    setTasks(prev => prev.map(t =>
+      toRemind.find(r => r.id === t.id) ? { ...t, lastReminderAt: newTime } : t
+    ));
+
+    // Fire one notification per task
+    toRemind.forEach(t => {
+      const group = currentGroups.find(g => g.id === t.groupId);
+      if (!group) return;
+      const notif: AppNotification = {
+        id: `notif_rem_${Date.now()}_${t.id}`,
+        title: `Reminder: ${t.title}`,
+        body: `Task still open in ${group.name}`,
+        groupName: group.name,
+        groupColor: group.color,
+        groupIcon: group.icon,
+        timestamp: new Date(),
+        read: false,
+        type: 'reminder',
+        taskId: t.id,
+      };
+      setNotifications(prev => [notif, ...prev]);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification(`⏰ ${notif.title}`, { body: notif.body, icon: '/favicon.ico' }); } catch {}
+      }
+    });
+  }, []); // stable ref — accesses state via refs
+
+  // Run on mount and every minute
+  useEffect(() => {
+    checkReminders();
+    const id = setInterval(checkReminders, 60_000);
+    return () => clearInterval(id);
+  }, [checkReminders]);
 
   const addSystemMessage = (m: Omit<SystemChatMessage, 'id' | 'timestamp'>) => {
     setSystemMessages(prev => [{
@@ -321,6 +381,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // ── Tasks ─────────────────────────────────────────────────────────────
   const addTask = (t: Task) => {
     setTasks(prev => [t, ...prev]);
+
+    // Notify all group members about the new task
+    const group = groupsRef.current.find(g => g.id === t.groupId);
+    if (group) {
+      const notif: AppNotification = {
+        id: `notif_new_${Date.now()}`,
+        title: `New task in ${group.name}`,
+        body: t.title,
+        groupName: group.name,
+        groupColor: group.color,
+        groupIcon: group.icon,
+        timestamp: new Date(),
+        read: false,
+        type: 'new_task',
+        taskId: t.id,
+      };
+      setNotifications(prev => [notif, ...prev]);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification(notif.title, { body: notif.body, icon: '/favicon.ico' }); } catch {}
+      }
+    }
+
     setTimeout(() => broadcastUpdate('tasks_updated'), 100);
   };
   const updateTask = (id: string, changes: Partial<Task>) => {
